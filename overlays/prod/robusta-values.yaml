@@ -1,0 +1,114 @@
+# =============================================================================
+# Production Environment Robusta Values
+# =============================================================================
+# This file contains production-specific overrides
+# Secrets should be managed via External Secrets or Sealed Secrets
+# =============================================================================
+
+clusterName: k3s-prod
+
+# Production VictoriaMetrics endpoint
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 7d
+      retentionSize: "20GB"
+      
+      # Remote write to Windows VictoriaMetrics
+      remoteWrite:
+        - url: "http://192.168.1.100:8428/api/v1/write"  # Update with your Windows IP
+          queueConfig:
+            capacity: 50000
+            maxSamplesPerSend: 10000
+            batchSendDeadline: 30s
+            maxShards: 10
+          writeRelabelConfigs:
+            - sourceLabels: [__name__]
+              targetLabel: cluster
+              replacement: k3s-prod
+            - sourceLabels: [__name__]
+              targetLabel: environment
+              replacement: production
+      
+      # Production resources
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+      
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+  
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 10Gi
+    additionalDataSources:
+      - name: VictoriaMetrics
+        type: prometheus
+        url: http://192.168.1.100:8428  # Update with your Windows IP
+        access: proxy
+        isDefault: false
+
+# Production runner resources
+runner:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 768Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  replicas: 2  # HA for production
+
+# Production notification sinks (secrets referenced via External Secrets)
+sinksConfig:
+  - robusta_sink:
+      name: robusta_ui_sink
+      token: "${ROBUSTA_TOKEN}"
+  
+  - slack_sink:
+      name: slack_prod
+      slack_channel: "#k3s-prod-alerts"
+      api_key: "${SLACK_API_KEY}"
+      channel_override:
+        - labels:
+            severity: critical
+          channel: "#k3s-prod-critical"
+  
+  - webhook_sink:
+      name: pagerduty_webhook
+      url: "https://events.pagerduty.com/v2/enqueue"
+      headers:
+        Content-Type: "application/json"
+      scope:
+        include:
+          - labels:
+              severity: critical
+
+# Additional production playbooks
+customPlaybooks:
+  # Page on-call for critical alerts
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeDown
+      - on_prometheus_alert:
+          alert_name: K3sAPIServerDown
+      - on_prometheus_alert:
+          alert_name: NodeCriticalMemory
+    actions:
+      - create_pagerduty_incident:
+          routing_key: "${PAGERDUTY_ROUTING_KEY}"
+          severity: critical
+    sinks:
+      - slack_prod

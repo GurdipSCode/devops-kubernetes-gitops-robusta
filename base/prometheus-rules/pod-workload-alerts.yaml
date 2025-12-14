@@ -1,0 +1,198 @@
+# =============================================================================
+# Pod and Workload Alert Rules
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pod-workload-alerts
+  labels:
+    app: kube-prometheus-stack
+    release: robusta
+spec:
+  groups:
+    - name: pod-health
+      interval: 30s
+      rules:
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total[1h]) > 5
+          for: 5m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+            description: "Container {{ $labels.container }} has restarted {{ $value | printf \"%.0f\" }} times in the last hour"
+
+        - alert: PodNotReady
+          expr: |
+            sum by(namespace, pod) (
+              max by(namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown"}) == 1
+            ) * on(namespace, pod) group_left(owner_kind, owner_name)
+            max by(namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!="Job"})
+          for: 15m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
+            description: "Pod owned by {{ $labels.owner_kind }}/{{ $labels.owner_name }} has been not ready for 15 minutes"
+
+        - alert: ContainerOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: warning
+            category: resources
+          annotations:
+            summary: "Container {{ $labels.container }} OOM killed"
+            description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} was OOM killed"
+
+        - alert: ContainerHighCPUThrottling
+          expr: |
+            sum by(namespace, pod, container) (
+              rate(container_cpu_cfs_throttled_periods_total[5m])
+            ) /
+            sum by(namespace, pod, container) (
+              rate(container_cpu_cfs_periods_total[5m])
+            ) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            category: resources
+          annotations:
+            summary: "Container {{ $labels.container }} is being CPU throttled"
+            description: "Container in {{ $labels.namespace }}/{{ $labels.pod }} is throttled {{ $value | printf \"%.0f\" }}% of the time"
+
+        - alert: ContainerHighMemoryUsage
+          expr: |
+            (
+              sum by(namespace, pod, container) (container_memory_working_set_bytes{container!=""}) /
+              sum by(namespace, pod, container) (kube_pod_container_resource_limits{resource="memory"})
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            category: resources
+          annotations:
+            summary: "Container {{ $labels.container }} high memory usage"
+            description: "Container in {{ $labels.namespace }}/{{ $labels.pod }} is using {{ $value | printf \"%.0f\" }}% of memory limit"
+
+        - alert: ContainerHighCPUUsage
+          expr: |
+            (
+              sum by(namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=""}[5m])) /
+              sum by(namespace, pod, container) (kube_pod_container_resource_limits{resource="cpu"})
+            ) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            category: resources
+          annotations:
+            summary: "Container {{ $labels.container }} high CPU usage"
+            description: "Container in {{ $labels.namespace }}/{{ $labels.pod }} is using {{ $value | printf \"%.0f\" }}% of CPU limit"
+
+    - name: workload-health
+      interval: 30s
+      rules:
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            (
+              kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+            ) and (
+              changes(kube_deployment_status_replicas_updated[10m]) == 0
+            )
+          for: 15m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replica mismatch"
+            description: "Expected {{ $value }} replicas but {{ $labels.deployment }} has different available count"
+
+        - alert: DeploymentGenerationMismatch
+          expr: |
+            kube_deployment_status_observed_generation != kube_deployment_metadata_generation
+          for: 10m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} generation mismatch"
+            description: "Deployment spec has not been observed - possible controller issues"
+
+        - alert: StatefulSetReplicasMismatch
+          expr: |
+            (
+              kube_statefulset_status_replicas_ready != kube_statefulset_status_replicas
+            ) and (
+              changes(kube_statefulset_status_replicas_updated[10m]) == 0
+            )
+          for: 15m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} replica mismatch"
+
+        - alert: DaemonSetNotScheduled
+          expr: |
+            kube_daemonset_status_desired_number_scheduled - kube_daemonset_status_current_number_scheduled > 0
+          for: 10m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} not fully scheduled"
+
+        - alert: DaemonSetMissScheduled
+          expr: |
+            kube_daemonset_status_number_misscheduled > 0
+          for: 5m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} has misscheduled pods"
+
+        - alert: JobFailed
+          expr: |
+            kube_job_status_failed > 0
+          for: 1m
+          labels:
+            severity: warning
+            category: workload
+          annotations:
+            summary: "Job {{ $labels.namespace }}/{{ $labels.job_name }} failed"
+
+        - alert: CronJobSuspended
+          expr: |
+            kube_cronjob_spec_suspend == 1
+          for: 1h
+          labels:
+            severity: info
+            category: workload
+          annotations:
+            summary: "CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} is suspended"
+
+        - alert: HPAMaxedOut
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+          for: 15m
+          labels:
+            severity: warning
+            category: scaling
+          annotations:
+            summary: "HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler }} at max replicas"
+            description: "HPA has been at maximum replicas for 15 minutes - may need to increase max"
+
+        - alert: HPAUnableToScale
+          expr: |
+            kube_horizontalpodautoscaler_status_condition{condition="ScalingActive",status="false"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            category: scaling
+          annotations:
+            summary: "HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler }} unable to scale"

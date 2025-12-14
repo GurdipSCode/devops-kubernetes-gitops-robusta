@@ -1,0 +1,103 @@
+# =============================================================================
+# ArgoCD Project for Monitoring Stack
+# =============================================================================
+# This project provides RBAC and resource restrictions for the monitoring apps
+# =============================================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "k3s Monitoring Stack (Robusta + Prometheus + Grafana)"
+  
+  # Source repositories
+  sourceRepos:
+    - 'https://github.com/YOUR_ORG/k3s-monitoring.git'
+    - 'https://robusta-charts.storage.googleapis.com'
+    - 'https://prometheus-community.github.io/helm-charts'
+  
+  # Allowed destination clusters and namespaces
+  destinations:
+    - namespace: 'robusta'
+      server: 'https://kubernetes.default.svc'
+    - namespace: 'monitoring-*'
+      server: 'https://kubernetes.default.svc'
+    - namespace: 'argocd'
+      server: 'https://kubernetes.default.svc'
+  
+  # Allowed cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRole
+    - group: 'rbac.authorization.k8s.io'
+      kind: ClusterRoleBinding
+    - group: 'admissionregistration.k8s.io'
+      kind: ValidatingWebhookConfiguration
+    - group: 'admissionregistration.k8s.io'
+      kind: MutatingWebhookConfiguration
+    - group: 'apiextensions.k8s.io'
+      kind: CustomResourceDefinition
+    - group: 'monitoring.coreos.com'
+      kind: '*'
+  
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ''
+      kind: '*'
+    - group: 'apps'
+      kind: '*'
+    - group: 'batch'
+      kind: '*'
+    - group: 'networking.k8s.io'
+      kind: '*'
+    - group: 'monitoring.coreos.com'
+      kind: '*'
+    - group: 'external-secrets.io'
+      kind: '*'
+  
+  # Deny deletion of certain resources
+  namespaceResourceBlacklist:
+    - group: ''
+      kind: ResourceQuota
+    - group: ''
+      kind: LimitRange
+  
+  # Roles for project members
+  roles:
+    - name: monitoring-admin
+      description: "Full access to monitoring applications"
+      policies:
+        - p, proj:monitoring:monitoring-admin, applications, *, monitoring/*, allow
+        - p, proj:monitoring:monitoring-admin, repositories, *, *, allow
+      groups:
+        - monitoring-admins
+    
+    - name: monitoring-viewer
+      description: "Read-only access to monitoring applications"
+      policies:
+        - p, proj:monitoring:monitoring-viewer, applications, get, monitoring/*, allow
+        - p, proj:monitoring:monitoring-viewer, applications, sync, monitoring/*, deny
+      groups:
+        - monitoring-viewers
+  
+  # Sync windows (optional - restrict sync times)
+  # syncWindows:
+  #   - kind: allow
+  #     schedule: '0 * * * *'
+  #     duration: 1h
+  #     applications:
+  #       - '*'
+  
+  # Orphaned resources monitoring
+  orphanedResources:
+    warn: true
+    ignore:
+      - group: ''
+        kind: ConfigMap
+        name: kube-root-ca.crt

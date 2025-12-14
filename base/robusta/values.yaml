@@ -1,0 +1,308 @@
+# =============================================================================
+# Robusta Base Values
+# =============================================================================
+# These are the base values that apply to all environments.
+# Environment-specific overrides go in overlays/<env>/robusta-values.yaml
+# =============================================================================
+
+# Cluster identification (override per environment)
+clusterName: k3s-cluster
+isSmallCluster: true
+
+# -----------------------------------------------------------------------------
+# PROMETHEUS STACK CONFIGURATION
+# -----------------------------------------------------------------------------
+enablePrometheusStack: true
+enableServiceMonitors: true
+
+kube-prometheus-stack:
+  # Prometheus configuration
+  prometheus:
+    prometheusSpec:
+      # Short local retention (VictoriaMetrics handles long-term)
+      retention: 3d
+      retentionSize: "5GB"
+      
+      # Resource limits for k3s
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+      
+      # Storage
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 10Gi
+      
+      # Enable all ServiceMonitors
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      
+      # Additional scrape configs for k3s components
+      additionalScrapeConfigs:
+        - job_name: 'k3s-server'
+          static_configs:
+            - targets: ['127.0.0.1:10249', '127.0.0.1:10250']
+          scheme: https
+          tls_config:
+            insecure_skip_verify: true
+  
+  # Alertmanager - disabled since Robusta handles alerting
+  alertmanager:
+    enabled: false
+  
+  # Grafana
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    sidecar:
+      dashboards:
+        enabled: true
+        searchNamespace: ALL
+        label: grafana_dashboard
+        labelValue: "1"
+    # Additional datasources configured in overlays
+  
+  # Node Exporter
+  nodeExporter:
+    enabled: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  
+  # Kube State Metrics
+  kubeStateMetrics:
+    enabled: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  
+  # kubelet scraping for k3s
+  kubelet:
+    enabled: true
+    serviceMonitor:
+      https: true
+      insecureSkipVerify: true
+  
+  # kube-proxy - disabled in k3s
+  kubeProxy:
+    enabled: false
+  
+  # Default rules
+  defaultRules:
+    create: true
+    rules:
+      alertmanager: false
+      etcd: true
+      kubeApiserver: true
+      kubeApiserverAvailability: true
+      kubeApiserverBurnrate: true
+      kubeApiserverHistogram: true
+      kubeApiserverSlos: true
+      kubeControllerManager: false
+      kubePrometheusGeneral: true
+      kubePrometheusNodeRecording: true
+      kubeProxy: false
+      kubeSchedulerAlerting: false
+      kubeSchedulerRecording: false
+      kubeStateMetrics: true
+      kubelet: true
+      network: true
+      node: true
+      nodeExporterAlerting: true
+      nodeExporterRecording: true
+      prometheus: true
+      prometheusOperator: true
+
+# -----------------------------------------------------------------------------
+# ROBUSTA RUNNER CONFIGURATION
+# -----------------------------------------------------------------------------
+runner:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  
+  # Tolerations for running on control plane if needed
+  tolerations:
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+# -----------------------------------------------------------------------------
+# PLATFORM PLAYBOOKS (Built-in)
+# -----------------------------------------------------------------------------
+enablePlatformPlaybooks: true
+
+builtinPlaybooks:
+  crashPodEnricher:
+    enabled: true
+    log_tail_lines: 200
+  
+  oomPodEnricher:
+    enabled: true
+    include_memory_graph: true
+  
+  imagePullBackoffEnricher:
+    enabled: true
+  
+  pendingPodEnricher:
+    enabled: true
+    include_node_info: true
+  
+  jobFailureEnricher:
+    enabled: true
+    log_tail_lines: 100
+
+# -----------------------------------------------------------------------------
+# CUSTOM PLAYBOOKS
+# -----------------------------------------------------------------------------
+customPlaybooks:
+  # Crash Loop with deep diagnostics
+  - triggers:
+      - on_pod_crash_loop:
+          restart_reason: CrashLoopBackOff
+          restart_count: 3
+    actions:
+      - pod_bash_enricher:
+          bash_command: |
+            echo "=== Last 100 log lines ==="
+            kubectl logs --tail=100 -n {{ namespace }} {{ name }} --previous 2>/dev/null || echo "No previous logs"
+            echo ""
+            echo "=== Current logs ==="
+            kubectl logs --tail=50 -n {{ namespace }} {{ name }} 2>/dev/null || echo "No current logs"
+      - pod_graph_enricher:
+          resource_type: CPU
+          display_limits: true
+      - pod_graph_enricher:
+          resource_type: Memory
+          display_limits: true
+      - related_pods:
+          output_format: table
+
+  # OOM Killed with memory analysis
+  - triggers:
+      - on_pod_oom_killed: {}
+    actions:
+      - pod_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 60
+          display_limits: true
+      - pod_bash_enricher:
+          bash_command: |
+            echo "=== Memory info before OOM ==="
+            kubectl top pod -n {{ namespace }} {{ name }} 2>/dev/null || echo "Metrics not available"
+            echo ""
+            echo "=== Pod resource configuration ==="
+            kubectl get pod -n {{ namespace }} {{ name }} -o jsonpath='{.spec.containers[*].resources}' | jq . 2>/dev/null || echo "Could not get resources"
+      - oom_killer_enricher: {}
+
+  # Image Pull failures
+  - triggers:
+      - on_image_pull_backoff: {}
+    actions:
+      - image_pull_backoff_reporter: {}
+      - pod_bash_enricher:
+          bash_command: |
+            echo "=== Events for pod ==="
+            kubectl get events -n {{ namespace }} --field-selector involvedObject.name={{ name }} --sort-by='.lastTimestamp'
+
+  # High CPU on nodes
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighCPU
+    actions:
+      - node_cpu_enricher:
+          duration_minutes: 30
+      - node_running_pods_enricher: {}
+
+  # High Memory on nodes
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighMemory
+    actions:
+      - node_memory_enricher:
+          duration_minutes: 30
+      - node_running_pods_enricher: {}
+
+  # Disk pressure
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeDiskPressure
+    actions:
+      - node_bash_enricher:
+          bash_command: |
+            echo "=== Disk usage ==="
+            df -h
+            echo ""
+            echo "=== Large directories in /var ==="
+            du -sh /var/* 2>/dev/null | sort -rh | head -10
+
+  # Deployment replica mismatch
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: DeploymentReplicasMismatch
+    actions:
+      - deployment_status_enricher: {}
+      - related_pods:
+          output_format: table
+
+  # Daily cluster health report
+  - triggers:
+      - on_schedule:
+          cron: "0 8 * * *"
+    actions:
+      - cluster_health_report:
+          include_node_info: true
+          include_pod_info: true
+          include_resource_usage: true
+
+  # Weekly cost optimization report
+  - triggers:
+      - on_schedule:
+          cron: "0 9 * * 1"
+    actions:
+      - krr_scan:
+          strategy: simple
+          cpu_percentile: 95
+          memory_buffer_percentage: 25
+
+# -----------------------------------------------------------------------------
+# ADDITIONAL SETTINGS
+# -----------------------------------------------------------------------------
+enableHolmesGPT: false
+
+globalActionParams:
+  log_tail_lines: 100
+  graph_duration_minutes: 60
