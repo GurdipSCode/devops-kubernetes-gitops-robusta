@@ -1,4 +1,4 @@
-# Robusta GitOps Observability Platform
+# devops-kubernetes-gitops-robusta - Robusta GitOps Observability Platform
 
 <p align="center">
   <img src="https://img.shields.io/badge/GitOps-ArgoCD-orange?logo=argo&style=flat-square" />
