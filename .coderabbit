@@ -1,0 +1,312 @@
+# CodeRabbit Configuration for ArgoCD Monitoring Repository
+# Place this file at the root of your repository as .coderabbit.yaml
+
+version: 1.0
+
+# Language settings
+language: en-US
+
+# Early access features
+early_access: true
+
+# Review settings
+reviews:
+  # Review profile
+  profile: chill  # Options: chill, assertive
+  
+  # Request changes workflow
+  request_changes_workflow: true
+  
+  # High level summary
+  high_level_summary: true
+  
+  # Poem style for summaries
+  poem: false
+  
+  # Review status
+  review_status: true
+  
+  # Collapse walkthrough
+  collapse_walkthrough: false
+  
+  # Auto review
+  auto_review:
+    enabled: true
+    
+    # Ignore specific file patterns
+    ignore_patterns:
+      - "**/*.md"
+      - "**/LICENSE"
+      - "**/.gitignore"
+      - "**/CHANGELOG.md"
+      - "docs/**/*.png"
+      - "docs/**/*.jpg"
+      - "**/test-fixtures/**"
+    
+    # Auto-approve trivial changes
+    auto_approve:
+      enabled: true
+      conditions:
+        - type: "documentation"
+          max_files: 3
+        - type: "formatting"
+          max_lines: 50
+  
+  # Tools to use
+  tools:
+    # Kubernetes manifest validation
+    kubernetes:
+      enabled: true
+      
+    # Helm chart validation  
+    helm:
+      enabled: true
+      
+    # YAML linting
+    yamllint:
+      enabled: true
+      rules:
+        line-length:
+          max: 120
+          allow-non-breakable-words: true
+        indentation:
+          spaces: 2
+          indent-sequences: true
+    
+    # Security scanning
+    security:
+      enabled: true
+      scanners:
+        - trivy
+        - checkov
+    
+    # OPA/Rego validation
+    opa:
+      enabled: true
+
+# Path-specific instructions
+path_instructions:
+  # VictoriaMetrics alerts
+  - path: "apps/victoriametrics/alerts/**/*.yaml"
+    instructions: |
+      For VictoriaMetrics alert files, check:
+      1. Alert has 'for' duration to prevent flapping
+      2. Alert uses rate() on counters
+      3. Alert has severity, team, and component labels (required for Robusta)
+      4. PromQL expression is efficient (no long lookback windows like [30d])
+      5. Alert name is descriptive and follows convention
+      6. Annotations provide clear summary and description with templates
+      
+      Example issues to flag:
+      - Missing 'for' clause
+      - Alert without severity label
+      - Counter metric without rate()
+      - Overly complex PromQL (>300 chars)
+  
+  # VictoriaMetrics recording rules
+  - path: "apps/victoriametrics/recording-rules/**/*.yaml"
+    instructions: |
+      For recording rule files, check:
+      1. Recording rule follows naming convention: level:metric:operations
+      2. Rule doesn't create high cardinality labels (pod_ip, instance_ip, etc.)
+      3. Rule uses appropriate aggregation (sum, avg, rate)
+      4. Rule has reasonable evaluation interval
+      5. Expression is optimized and efficient
+      
+      Flag these issues:
+      - Bad naming (e.g., "my_custom_metric" instead of "namespace:requests:rate5m")
+      - label_replace() with high-cardinality labels
+      - Missing aggregation on high-cardinality metrics
+  
+  # Robusta configuration
+  - path: "apps/robusta/**/*.yaml"
+    instructions: |
+      For Robusta configuration files, check:
+      1. Playbook triggers are specific (not too broad)
+      2. Actions are clearly defined
+      3. Sink configurations have proper channels
+      4. Custom playbooks have error handling
+      5. Secrets are referenced, not hardcoded
+      6. Resource limits are set for runner pods
+      
+      Pay attention to:
+      - Webhook URLs should use secret references
+      - Playbook regex patterns should be escaped properly
+      - Channel names follow naming convention
+  
+  # OPA policies
+  - path: "**/policies/**/*.rego"
+    instructions: |
+      For OPA/Rego policy files, check:
+      1. Policy has proper METADATA comments (title, description, severity)
+      2. Violation messages are clear and actionable
+      3. Policy uses future.keywords imports
+      4. Edge cases are handled (missing fields, empty values)
+      5. Exemptions are clearly documented
+      6. Performance is considered (no nested loops on unbounded data)
+      
+      Security concerns:
+      - Ensure policies don't accidentally exempt critical resources
+      - Check for logic errors that could allow bypasses
+  
+  # OPA tests
+  - path: "**/tests/**/*_test.rego"
+    instructions: |
+      For OPA test files, check:
+      1. Tests cover both positive and negative cases
+      2. Test names are descriptive (test_pod_without_limits_denied)
+      3. Input fixtures are realistic
+      4. Edge cases are tested (empty values, missing fields)
+      5. Each policy violation type has a test
+  
+  # Helm values files
+  - path: "**/values*.yaml"
+    instructions: |
+      For Helm values files, check:
+      1. Resource limits and requests are set
+      2. No hardcoded secrets or passwords
+      3. Image tags are specified (not 'latest')
+      4. Replica counts are appropriate for environment
+      5. Storage sizes are reasonable
+      6. Comments explain non-obvious configuration
+      
+      Flag these:
+      - passwords: "changeme"
+      - image: some-image:latest
+      - Missing resource limits for production
+  
+  # Kubernetes manifests
+  - path: "apps/**/*.yaml"
+    instructions: |
+      For Kubernetes manifests, check:
+      1. Resources have appropriate labels
+      2. Security contexts are set (runAsNonRoot, readOnlyRootFilesystem)
+      3. Resource limits are defined
+      4. Health probes are configured
+      5. Secrets are mounted securely
+      6. Namespace is specified or defaulted correctly
+      
+      Security checks:
+      - No privileged containers
+      - No hostNetwork, hostPID, hostIPC
+      - No running as root
+  
+  # Python tests
+  - path: "tests/**/*.py"
+    instructions: |
+      For Python test files, check:
+      1. Tests use proper mocking
+      2. Assertions are clear and specific
+      3. Test isolation (no shared state)
+      4. Error cases are tested
+      5. Fixtures are reusable
+      6. Tests are fast (<1s each ideally)
+  
+  # GitHub Actions / CI
+  - path: ".github/workflows/**/*.yml"
+    instructions: |
+      For CI/CD workflows, check:
+      1. Secrets are properly referenced
+      2. Steps have timeouts
+      3. Error handling is present
+      4. Caching is used where appropriate
+      5. Matrix builds are efficient
+      6. Workflow triggers are specific
+
+# Custom review instructions
+custom_review_instructions: |
+  This is an ArgoCD repository for monitoring infrastructure including:
+  - VictoriaMetrics for metrics storage and alerting
+  - Robusta for alert enrichment and automation
+  - OPA Gatekeeper for admission control
+  - Kubernetes monitoring resources
+  
+  Key focus areas:
+  
+  1. ALERT QUALITY
+     - All alerts must have: severity, team, component labels
+     - Alerts should have 'for' duration to prevent flapping
+     - Use rate() on counters, not raw counters
+     - Alert expressions should be efficient (avoid long lookback windows)
+  
+  2. OPERATIONAL SAFETY
+     - Recording rules must follow naming convention: level:metric:operations
+     - No high-cardinality labels (pod_ip, instance_ip, container_id)
+     - Resource limits on all deployments
+     - Health probes on all containers
+  
+  3. SECURITY
+     - No hardcoded secrets
+     - No privileged containers
+     - No root users
+     - Proper RBAC
+  
+  4. TESTING
+     - Alert rules should have promtool tests
+     - OPA policies should have rego tests
+     - Robusta playbooks should have Python tests
+  
+  5. DOCUMENTATION
+     - Complex expressions should have comments
+     - Non-obvious configuration should be documented
+     - Changes should update relevant README files
+
+# Chat settings
+chat:
+  auto_reply: true
+
+# Knowledge base
+knowledge_base:
+  # Custom learnings
+  learnings:
+    enabled: true
+    scope: "repository"  # or "organization"
+  
+  # Opt-in for learning from reviews
+  opt_in: true
+
+# Tone settings
+tone_instructions: |
+  - Be concise and actionable
+  - Focus on high-impact issues first
+  - Provide specific examples of fixes
+  - Explain WHY something is a problem, not just WHAT
+  - For monitoring configs, explain the operational impact
+  - Use emojis sparingly: ⚠️ for warnings, ❌ for errors, ✅ for good patterns
+
+# Additional instructions for specific file types
+file_type_instructions:
+  yaml:
+    - "Check for valid YAML syntax"
+    - "Ensure consistent indentation (2 spaces)"
+    - "Validate Kubernetes resource schemas"
+    - "Check for deprecated API versions"
+  
+  rego:
+    - "Ensure proper package naming"
+    - "Check for logic errors"
+    - "Validate against OPA best practices"
+    - "Ensure test coverage"
+  
+  python:
+    - "Follow PEP 8 style guide"
+    - "Check for proper exception handling"
+    - "Ensure tests use mocks appropriately"
+    - "Validate type hints if present"
+
+# Disable specific checks
+disable_checks:
+  # Don't complain about line length in YAML for long PromQL expressions
+  - "yaml-line-too-long-in-promql"
+  
+  # Don't enforce alphabetical ordering of Kubernetes resources
+  - "kubernetes-resource-ordering"
+
+# PR title validation
+pull_requests:
+  title_pattern: "^(feat|fix|docs|style|refactor|perf|test|chore)(\\(.+\\))?: .+"
+  title_pattern_error: |
+    PR title must follow conventional commits format:
+    feat(vm): add CPU alerts
+    fix(robusta): correct enricher logic
+    docs: update deployment guide
