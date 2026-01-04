@@ -1,0 +1,25 @@
+secrets.yaml
+*-secret.yaml
+*.key
+*.pem
+
+# Keep example files
+!*.example
+
+# Helm
+charts/
+*.tgz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak

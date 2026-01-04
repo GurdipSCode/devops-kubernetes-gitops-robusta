@@ -1,0 +1,56 @@
+# Robusta Helm Values - Base Configuration
+# https://docs.robusta.dev/master/configuration/index.html
+# Environment-specific overrides in overlays/
+
+# =============================================================================
+# CLUSTER CONFIGURATION
+# =============================================================================
+# Disable bundled Prometheus - we use VictoriaMetrics
+enablePrometheusStack: false
+
+# Global configuration - shared across environments
+globalConfig:
+  # VictoriaMetrics connection
+  prometheus_url: "http://vm-stack-vmselect.victoria-metrics.svc:8481/select/0/prometheus"
+
+# =============================================================================
+# SINKS - Where enriched alerts are sent
+# =============================================================================
+# Environment-specific - defined in overlays
+sinksConfig: []
+
+# =============================================================================
+# CUSTOM PLAYBOOKS - Alert enrichment and automation
+# =============================================================================
+# Environment-specific - defined in overlays or playbooks/
+customPlaybooks: []
+
+# =============================================================================
+# BUILT-IN PLAYBOOKS - Shared defaults
+# =============================================================================
+builtinPlaybooks:
+  kubernetesWarningEventsReport:
+    enabled: true
+  crashLoopDetection:
+    enabled: true
+  oomKillDetection:
+    enabled: true
+  imagePullBackoffDetection:
+    enabled: true
+  pendingPodDetection:
+    enabled: true
+  nodeIssueDetection:
+    enabled: true
+
+# =============================================================================
+# SERVICE ACCOUNT & RBAC
+# =============================================================================
+serviceAccount:
+  create: true
+  name: robusta-runner
+
+clusterRole:
+  create: true
+
+clusterRoleBinding:
+  create: true

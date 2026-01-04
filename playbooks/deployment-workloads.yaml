@@ -1,0 +1,31 @@
+# Deployment & Workload Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: DeploymentReplicasMismatch
+    actions:
+      - deployment_events_enricher: {}
+      - related_pods: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: DeploymentNoAvailableReplicas
+    actions:
+      - deployment_events_enricher: {}
+      - related_pods: {}
+      - logs_enricher:
+          container_tail_lines: 50
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: DeploymentRolloutStuck
+    actions:
+      - deployment_events_enricher: {}
+      - related_pods: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: StatefulSetReplicasMismatch
+    actions:
+      - statefulset_events_enricher: {}
+      - related_pods: {}

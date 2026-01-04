@@ -1,0 +1,68 @@
+# Bash Script Enrichment - Node Diagnostics
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighDiskUsage
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Find largest directories on the node
+            echo "=== Top 10 Largest Directories ==="
+            du -h /host/var/lib/docker /host/var/log /host/tmp 2>/dev/null | sort -rh | head -10
+
+            echo -e "\n=== Disk Usage by Filesystem ==="
+            df -h | grep -v tmpfs
+
+            echo -e "\n=== Recent Large Files (last 24h) ==="
+            find /host/var/log -type f -mtime -1 -size +100M -exec ls -lh {} \; 2>/dev/null | head -10
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighMemory
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Memory usage analysis
+            echo "=== Top 10 Memory Consuming Processes ==="
+            ps aux --sort=-%mem | head -11
+
+            echo -e "\n=== Memory Breakdown ==="
+            free -h
+
+            echo -e "\n=== Swap Usage ==="
+            swapon --show
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighCPU
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # CPU usage analysis
+            echo "=== Top 10 CPU Consuming Processes ==="
+            ps aux --sort=-%cpu | head -11
+
+            echo -e "\n=== Load Average and CPU Info ==="
+            uptime
+            lscpu | grep -E "^CPU\(s\)|^Model name"
+
+            echo -e "\n=== CPU Usage Per Core (last 5 samples) ==="
+            mpstat -P ALL 1 5 2>/dev/null || echo "mpstat not available"
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeNotReady
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Node health diagnostics
+            NODE_NAME="${NODE_NAME}"
+
+            echo "=== Node Conditions ==="
+            kubectl describe node ${NODE_NAME} | grep -A 20 "Conditions:"
+
+            echo -e "\n=== Node Resource Pressure ==="
+            kubectl describe node ${NODE_NAME} | grep -E "MemoryPressure|DiskPressure|PIDPressure"
+
+            echo -e "\n=== Recent Node Events ==="
+            kubectl get events --field-selector involvedObject.name=${NODE_NAME} --sort-by='.lastTimestamp' | tail -15

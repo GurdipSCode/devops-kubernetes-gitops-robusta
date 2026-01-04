@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Merge all playbook files
+configMapGenerator:
+  - name: robusta-playbooks
+    files:
+      - pod-crash-restarts.yaml
+      - pod-oom-memory.yaml
+      - pod-cpu.yaml
+      - pod-scheduling.yaml
+      - node-cpu-memory.yaml
+      - node-disk-health.yaml
+      - deployment-workloads.yaml
+      - jobs-storage.yaml
+      - k3s-components.yaml
+      - bash-node-enrichment.yaml
+      - bash-pod-enrichment.yaml
+      - bash-workload-enrichment.yaml

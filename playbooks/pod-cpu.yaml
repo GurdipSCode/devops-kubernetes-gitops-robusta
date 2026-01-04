@@ -1,0 +1,18 @@
+# Pod CPU Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerHighCPUUsage
+    actions:
+      - pod_graph_enricher:
+          resource_type: CPU
+          duration_minutes: 30
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerHighCPUThrottling
+    actions:
+      - pod_graph_enricher:
+          resource_type: CPU
+          duration_minutes: 30
+      - cpu_throttling_analysis: {}

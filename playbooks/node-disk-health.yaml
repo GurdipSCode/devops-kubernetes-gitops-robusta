@@ -1,0 +1,34 @@
+# Node Disk & Health Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighDiskUsage
+    actions:
+      - node_disk_analyzer: {}
+      - node_running_pods_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeCriticalDiskUsage
+    actions:
+      - node_disk_analyzer: {}
+      - node_running_pods_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeDiskWillFillIn24Hours
+    actions:
+      - node_disk_analyzer: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeDown
+    actions:
+      - node_health_watcher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeNotReady
+    actions:
+      - node_health_watcher: {}
+      - node_running_pods_enricher: {}

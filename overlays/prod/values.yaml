@@ -1,0 +1,44 @@
+# Production Environment Overrides
+# Only values that differ from base
+
+clusterName: k3s-prod
+
+globalConfig:
+  grafana_url: "http://vm-stack-grafana.victoria-metrics.svc:3000"
+  alertmanager_url: "http://vm-stack-alertmanager.victoria-metrics.svc:9093"
+
+runner:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  log_level: INFO
+
+sinksConfig:
+  - pagerduty_sink:
+      name: pagerduty_critical
+      api_key: "{{ env.PAGERDUTY_API_KEY }}"
+      match:
+        - severity: ["critical"]
+
+  - slack_sink:
+      name: slack_critical
+      slack_channel: "#k3s-critical"
+      api_key: "{{ env.SLACK_API_KEY }}"
+      match:
+        - severity: ["critical"]
+
+  - slack_sink:
+      name: slack_warnings
+      slack_channel: "#k3s-warnings"
+      api_key: "{{ env.SLACK_API_KEY }}"
+      match:
+        - severity: ["warning"]
+
+  - slack_sink:
+      name: slack_all
+      slack_channel: "#k3s-alerts"
+      api_key: "{{ env.SLACK_API_KEY }}"

@@ -1,0 +1,39 @@
+# Node CPU & Memory Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighCPUUsage
+    actions:
+      - node_graph_enricher:
+          resource_type: CPU
+          duration_minutes: 60
+      - node_running_pods_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeCriticalCPUUsage
+    actions:
+      - node_graph_enricher:
+          resource_type: CPU
+          duration_minutes: 60
+      - node_running_pods_enricher: {}
+      - node_cpu_analysis: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeHighMemoryUsage
+    actions:
+      - node_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 60
+      - node_running_pods_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NodeCriticalMemoryUsage
+    actions:
+      - node_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 60
+      - node_running_pods_enricher: {}
+      - node_memory_analysis: {}

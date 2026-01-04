@@ -1,0 +1,31 @@
+# Pod OOM & Memory Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PodOOMKilled
+    actions:
+      - logs_enricher:
+          container_tail_lines: 50
+          previous_container: true
+      - pod_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 60
+      - oom_killer_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerCriticalMemoryUsage
+    actions:
+      - pod_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 30
+      - logs_enricher:
+          container_tail_lines: 50
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerHighMemoryUsage
+    actions:
+      - pod_graph_enricher:
+          resource_type: Memory
+          duration_minutes: 30

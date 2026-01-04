@@ -1,0 +1,28 @@
+# K3s Component Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: KubeAPIServerErrors
+    actions:
+      - api_server_analysis: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: CoreDNSDown
+    actions:
+      - dns_analysis: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: CoreDNSErrorsHigh
+    actions:
+      - dns_analysis: {}
+
+  # Catch-all for critical alerts
+  - triggers:
+      - on_prometheus_alert:
+          status: firing
+          alert_name: "*"
+          severity: critical
+    actions:
+      - default_enricher: {}

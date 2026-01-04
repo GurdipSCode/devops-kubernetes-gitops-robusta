@@ -1,0 +1,36 @@
+# Bash Script Enrichment - Pod Diagnostics
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PodCrashLooping
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Advanced pod diagnostics
+            POD_NAME="${POD_NAME}"
+            NAMESPACE="${NAMESPACE}"
+
+            echo "=== Pod Resource Usage ==="
+            kubectl top pod ${POD_NAME} -n ${NAMESPACE} 2>/dev/null || echo "Metrics not available"
+
+            echo -e "\n=== Recent Pod Events ==="
+            kubectl get events -n ${NAMESPACE} --field-selector involvedObject.name=${POD_NAME} --sort-by='.lastTimestamp' | tail -10
+
+            echo -e "\n=== Pod YAML ==="
+            kubectl get pod ${POD_NAME} -n ${NAMESPACE} -o yaml | grep -A 10 "resources:\|restartPolicy:\|securityContext:"
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerOOMKilled
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # OOM killer investigation
+            echo "=== Recent OOM Kills from dmesg ==="
+            dmesg | grep -i "killed process" | tail -5
+
+            echo -e "\n=== Memory Limits and Requests ==="
+            kubectl get pod ${POD_NAME} -n ${NAMESPACE} -o json | jq '.spec.containers[] | {name: .name, limits: .resources.limits, requests: .resources.requests}'
+
+            echo -e "\n=== Current Memory Usage ==="
+            kubectl top pod ${POD_NAME} -n ${NAMESPACE} --containers 2>/dev/null

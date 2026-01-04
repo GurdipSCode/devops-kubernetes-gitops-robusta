@@ -1,0 +1,32 @@
+# Job & Storage Alert Enrichment
+customPlaybooks:
+  # Job alerts
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: JobFailed
+    actions:
+      - job_events_enricher: {}
+      - job_pod_enricher: {}
+      - logs_enricher:
+          container_tail_lines: 100
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: CronJobLastRunFailed
+    actions:
+      - job_events_enricher: {}
+      - logs_enricher:
+          container_tail_lines: 100
+
+  # Storage alerts
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PersistentVolumeClaimPending
+    actions:
+      - pvc_events_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PersistentVolumeCriticalUsage
+    actions:
+      - volume_analysis: {}

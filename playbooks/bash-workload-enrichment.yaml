@@ -1,0 +1,75 @@
+# Bash Script Enrichment - Workload & Network Diagnostics
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: DeploymentReplicasMismatch
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Deployment replica analysis
+            DEPLOYMENT="${DEPLOYMENT}"
+            NAMESPACE="${NAMESPACE}"
+
+            echo "=== Deployment Status ==="
+            kubectl get deployment ${DEPLOYMENT} -n ${NAMESPACE} -o wide
+
+            echo -e "\n=== ReplicaSet Status ==="
+            kubectl get rs -n ${NAMESPACE} -l app=${DEPLOYMENT} --sort-by='.metadata.creationTimestamp'
+
+            echo -e "\n=== Pod Status Breakdown ==="
+            kubectl get pods -n ${NAMESPACE} -l app=${DEPLOYMENT} -o wide | awk '{print $3}' | sort | uniq -c
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PVCAlmostFull
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # PVC usage analysis
+            PVC_NAME="${PVC_NAME}"
+            NAMESPACE="${NAMESPACE}"
+
+            echo "=== PVC Details ==="
+            kubectl get pvc ${PVC_NAME} -n ${NAMESPACE} -o wide
+
+            echo -e "\n=== Pods Using This PVC ==="
+            kubectl get pods -n ${NAMESPACE} -o json | jq -r '.items[] | select(.spec.volumes[]?.persistentVolumeClaim.claimName == "'${PVC_NAME}'") | .metadata.name'
+
+            echo -e "\n=== Largest Files in Volume ==="
+            # This requires exec into pod - example
+            POD=$(kubectl get pods -n ${NAMESPACE} -o json | jq -r '.items[] | select(.spec.volumes[]?.persistentVolumeClaim.claimName == "'${PVC_NAME}'") | .metadata.name' | head -1)
+            if [ ! -z "$POD" ]; then
+              kubectl exec -n ${NAMESPACE} ${POD} -- du -sh /* 2>/dev/null | sort -rh | head -10
+            fi
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: NetworkErrors
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Network diagnostics
+            echo "=== Network Interface Errors ==="
+            ip -s link show | grep -A 5 "state UP"
+
+            echo -e "\n=== Network Connections ==="
+            ss -s
+
+            echo -e "\n=== DNS Resolution Test ==="
+            nslookup kubernetes.default.svc.cluster.local 2>&1 | head -10
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: CoreDNSDown
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # CoreDNS diagnostics
+            echo "=== CoreDNS Pod Status ==="
+            kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+
+            echo -e "\n=== CoreDNS Logs (last 50 lines) ==="
+            kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+
+            echo -e "\n=== DNS Service Endpoints ==="
+            kubectl get endpoints kube-dns -n kube-system

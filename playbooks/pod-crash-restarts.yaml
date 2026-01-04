@@ -1,0 +1,35 @@
+# Pod Crash & Restart Alert Enrichment
+customPlaybooks:
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PodCrashLooping
+    actions:
+      - logs_enricher:
+          container_tail_lines: 100
+      - pod_events_enricher: {}
+      - pod_issue_investigator: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PodCrashLoopBackOff
+    actions:
+      - logs_enricher:
+          container_tail_lines: 100
+      - pod_events_enricher: {}
+      - pod_issue_investigator: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: PodFrequentRestarts
+    actions:
+      - logs_enricher:
+          container_tail_lines: 50
+      - pod_events_enricher: {}
+
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: ContainerRestarted
+    actions:
+      - logs_enricher:
+          container_tail_lines: 50
+          previous_container: true

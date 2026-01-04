@@ -1,0 +1,82 @@
+# Robusta Sinks Configuration
+# https://docs.robusta.dev/master/configuration/sinks/index.html
+#
+# IMPORTANT: Store sensitive values (API keys, tokens) in Kubernetes Secrets
+# and reference them using environment variables or external secrets.
+
+sinksConfig:
+  # =============================================================================
+  # SLACK SINK
+  # =============================================================================
+  - slack_sink:
+      name: main_slack
+      slack_channel: "#k3s-alerts"
+      # Use environment variable for API key (set in secret)
+      api_key: "{{ env.SLACK_API_KEY }}"
+      
+      # Optional: Customize message format
+      # channel_override: "#critical-alerts"  # Override channel for specific alerts
+      
+      # Optional: Filter which alerts go to this sink
+      # match:
+      #   - severity: ["critical", "warning"]
+      #   - namespace: ["production", "kube-system"]
+      
+      # Optional: Don't send these
+      # exclude:
+      #   - severity: ["info"]
+
+  # =============================================================================
+  # MICROSOFT TEAMS SINK (Alternative)
+  # =============================================================================
+  # - teams_sink:
+  #     name: main_teams
+  #     webhook_url: "{{ env.TEAMS_WEBHOOK_URL }}"
+
+  # =============================================================================
+  # PAGERDUTY SINK (For critical alerts)
+  # =============================================================================
+  # - pagerduty_sink:
+  #     name: pagerduty_critical
+  #     api_key: "{{ env.PAGERDUTY_API_KEY }}"
+  #     match:
+  #       - severity: ["critical"]
+
+  # =============================================================================
+  # OPSGENIE SINK
+  # =============================================================================
+  # - opsgenie_sink:
+  #     name: opsgenie
+  #     api_key: "{{ env.OPSGENIE_API_KEY }}"
+  #     teams:
+  #       - name: "Platform Team"
+  #         id: "your-team-id"
+
+  # =============================================================================
+  # DISCORD SINK
+  # =============================================================================
+  # - discord_sink:
+  #     name: discord
+  #     url: "{{ env.DISCORD_WEBHOOK_URL }}"
+
+  # =============================================================================
+  # WEBHOOK SINK (Generic)
+  # =============================================================================
+  # - webhook_sink:
+  #     name: custom_webhook
+  #     url: "https://your-webhook-endpoint.com/alerts"
+  #     headers:
+  #       Authorization: "Bearer {{ env.WEBHOOK_TOKEN }}"
+
+  # =============================================================================
+  # JIRA SINK (Create tickets)
+  # =============================================================================
+  # - jira_sink:
+  #     name: jira
+  #     url: "https://your-org.atlassian.net"
+  #     username: "{{ env.JIRA_USERNAME }}"
+  #     api_key: "{{ env.JIRA_API_KEY }}"
+  #     project_key: "OPS"
+  #     issue_type: "Bug"
+  #     match:
+  #       - severity: ["critical"]
