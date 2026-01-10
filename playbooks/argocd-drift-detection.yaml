@@ -1,0 +1,20 @@
+# ArgoCD GitOps Drift Detection
+# Monitors ArgoCD applications and alerts when they're out of sync
+# Runs every 30 minutes to check sync status
+
+customPlaybooks:
+  - triggers:
+      - on_schedule:
+          fixed_delay_repeat:
+            repeat: 1800  # Every 30 minutes
+    actions:
+      - bash_enricher:
+          bash_command: |
+            # Check ArgoCD application sync status
+            kubectl get applications -A -o json 2>/dev/null | \
+            jq -r '.items[] | select(.status.sync.status != "Synced") |
+            "Application: \(.metadata.namespace)/\(.metadata.name)\nStatus: \(.status.sync.status)\nRevision: \(.status.sync.revision // "unknown")\n---"' || \
+            echo "No out-of-sync applications found"
+      - create_finding:
+          aggregation_key: "argocd_drift_check"
+          title: "ArgoCD Sync Status Check"

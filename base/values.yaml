@@ -41,6 +41,10 @@ builtinPlaybooks:
     enabled: true
   nodeIssueDetection:
     enabled: true
+  unusedResourcesReport:
+    enabled: true
+    cpu_threshold: 5  # Alert if <5% CPU used
+    memory_threshold: 10  # Alert if <10% memory used
 
 # =============================================================================
 # SERVICE ACCOUNT & RBAC

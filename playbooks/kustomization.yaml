@@ -17,3 +17,5 @@ configMapGenerator:
       - bash-node-enrichment.yaml
       - bash-pod-enrichment.yaml
       - bash-workload-enrichment.yaml
+      - argocd-drift-detection.yaml
+      - custom-alert-templates.yaml

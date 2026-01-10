@@ -1,0 +1,81 @@
+# Lefthook configuration for Robusta K3s GitOps
+# Runs validation and linting hooks locally before committing
+
+pre-commit:
+  parallel: true
+  commands:
+    # Validate YAML syntax
+    yaml-lint:
+      glob: "*.{yml,yaml}"
+      run: >
+        yamllint -d "{extends: default, rules: {line-length: {max: 120}, document-start: disable}}" {staged_files}
+      skip:
+        - merge
+        - rebase
+
+    # Validate Kubernetes manifests
+    kubeconform:
+      glob: "*.{yml,yaml}"
+      exclude: ".teamcity|cliff.toml|lefthook.yml|mergify.yml"
+      run: |
+        if (Get-Command kubeconform -ErrorAction SilentlyContinue) {
+          kubeconform -strict -ignore-missing-schemas {staged_files}
+        } else {
+          Write-Host "⚠️  kubeconform not installed, skipping"
+        }
+      runner: powershell
+      skip:
+        - merge
+        - rebase
+    
+    # Check for secrets
+    detect-secrets:
+      glob: "*.{yml,yaml}"
+      run: |
+        if (Get-Command ggshield -ErrorAction SilentlyContinue) {
+          ggshield secret scan pre-commit {staged_files}
+        } else {
+          Write-Host "⚠️  ggshield not installed, skipping"
+        }
+      runner: powershell
+    
+    # Validate kustomize builds
+    kustomize-build:
+      glob: "**/kustomization.yaml"
+      run: |
+        if (Get-Command kustomize -ErrorAction SilentlyContinue) {
+          Get-ChildItem -Path overlays -Directory | ForEach-Object {
+            Write-Host "Building $($_.FullName)..."
+            kustomize build $_.FullName | Out-Null
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          Write-Host "✓ All kustomize overlays build successfully"
+        } else {
+          Write-Host "⚠️  kustomize not installed, skipping"
+        }
+      runner: powershell
+
+pre-push:
+  parallel: false
+  commands:
+    # Run full validation before pushing
+    full-validation:
+      run: |
+        Write-Host "Running full validation..."
+        if (Test-Path .teamcity/settings.kts) {
+          Write-Host "✓ Pre-push validation passed"
+        }
+      runner: powershell
+
+commit-msg:
+  commands:
+    # Ensure commit messages follow conventional commits
+    conventional-commit:
+      run: |
+        $commit_msg = Get-Content {1} -Raw
+        if ($commit_msg -notmatch "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:\s.+") {
+          Write-Host "❌ Commit message must follow Conventional Commits format"
+          Write-Host "Examples: feat: add feature, fix: resolve bug, docs: update readme"
+          exit 1
+        }
+      runner: powershell

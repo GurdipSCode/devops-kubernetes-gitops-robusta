@@ -1,0 +1,17 @@
+# Custom Alert Message Templates
+# Enriches alerts with formatted messages and runbook links
+
+customPlaybooks:
+  # Template for all Prometheus alerts
+  - triggers:
+      - on_prometheus_alert:
+          alert_name: CustomAlert
+    actions:
+      - template_enricher:
+          template: |
+            🚨 **Alert**: $alertname
+            📦 **Pod**: $pod
+            🏷️ **Namespace**: $namespace
+            ⏰ **Since**: $startsAt
+
+            Check runbook: https://runbooks.company.com/$alertname
